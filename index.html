@@ -79,7 +79,7 @@
     <div id="myListTab">
       <div class="card">
         <h3>הוספת פריט לרשימה</h3>
-        <input type="text" id="newItemName" list="presetItems" placeholder="הקלד פריט או בחר מהרשימה...">
+        <input type="text" id="newItemName" list="presetItems" placeholder="הקלד פריט לחץ Enter להוספה...">
         <datalist id="presetItems">
           <option value="דרכון ואישורי טיסה">
           <option value="רישיון נהיגה בינלאומי">
@@ -191,6 +191,13 @@
       }
     });
 
+    // התחברות גם בלחיצה על Enter במסך ההתחברות
+    userNameInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        loginBtn.click();
+      }
+    });
+
     logoutBtn.addEventListener("click", () => {
       localStorage.removeItem("packing_app_user");
       location.reload();
@@ -224,12 +231,21 @@
       newItemName.classList.remove("error");
     });
 
+    // לחיצה על Enter בשדה הפריט
+    newItemName.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addItemBtn.click();
+      }
+    });
+
     addItemBtn.addEventListener("click", async () => {
       const name = newItemName.value.trim();
       
       // סימון באדום כשהשדה ריק
       if (!name) {
         newItemName.classList.add("error");
+        newItemName.focus();
         return;
       }
 
@@ -238,6 +254,7 @@
       const exists = myItems.some(i => normalizeText(i.name) === normalizedInput);
       if (exists) {
         alert(`הפריט "${name}" כבר קיים ברשימה שלך!`);
+        newItemName.focus();
         return;
       }
 
@@ -251,6 +268,7 @@
 
       newItemName.value = "";
       newItemName.classList.remove("error");
+      newItemName.focus(); // החזרת המיקוד לשדה ההקלדה מיד לאחר ההוספה
     });
 
     function loadMyItems() {
