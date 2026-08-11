@@ -36,6 +36,12 @@
     .tab-btn { flex: 1; background: #e2e8f0; color: var(--text); padding: 10px; border-radius: 8px; border: none; font-weight: bold; }
     .tab-btn.active { background: var(--primary); color: white; }
 
+    /* לשוניות משנה לחברים */
+    .friends-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; scrollbar-width: none; }
+    .friends-tabs::-webkit-scrollbar { display: none; }
+    .friend-tab-chip { width: auto; white-space: nowrap; padding: 6px 14px; border-radius: 20px; background: #e2e8f0; color: var(--text); font-size: 0.85rem; border: none; font-weight: 500; margin: 0; }
+    .friend-tab-chip.active { background: var(--primary); color: white; }
+
     .item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border); gap: 8px; }
     .item:last-child { border-bottom: none; }
     .item-title { flex: 1; }
@@ -82,7 +88,6 @@
 
   <h1>🎒 רשימת ציוד לטיול</h1>
 
-  <!-- Toast -->
   <div id="toast"></div>
 
   <!-- מסך התחברות -->
@@ -99,7 +104,7 @@
       <button id="logoutBtn" class="btn-sm btn-danger" style="width: auto;">החלף שם</button>
     </div>
 
-    <!-- בלשוניות -->
+    <!-- בלשוניות ראשיוֹת -->
     <div class="tabs">
       <button class="tab-btn active" id="myTabBtn">הציוד שלי</button>
       <button class="tab-btn" id="friendsTabBtn">רשימות חברים 🌐</button>
@@ -149,7 +154,12 @@
     <div id="friendsListTab" class="hidden">
       <div class="card">
         <h3>רשימות ציבוריות של חברים</h3>
-        <p style="font-size: 0.85rem; color: var(--gray); margin-bottom: 12px;">תוכל לייבא פריטים שחברים שיתפו ישירות לרשימה שלך.</p>
+        <p style="font-size: 0.85rem; color: var(--gray); margin-bottom: 12px;">בחר חבר לצפייה ברשימה שלו וייבוא פריטים:</p>
+        
+        <!-- סרגל לשוניות שמות החברים -->
+        <div id="friendsTabsContainer" class="friends-tabs"></div>
+        
+        <!-- תוכן הרשימה של החבר שנבחר -->
         <div id="friendsItemsList">טוען רשימות חברים...</div>
       </div>
     </div>
@@ -175,6 +185,7 @@
     const itemsRef = collection(db, "packing_items");
 
     let currentUser = (localStorage.getItem("packing_app_user") || "").trim();
+    let selectedFriend = "all"; // ברירת מחדל: הצג את כל החברים
 
     const loginCard = document.getElementById("loginCard");
     const appContent = document.getElementById("appContent");
@@ -193,6 +204,7 @@
     const newItemVisibility = document.getElementById("newItemVisibility");
     const addItemBtn = document.getElementById("addItemBtn");
     const myItemsList = document.getElementById("myItemsList");
+    const friendsTabsContainer = document.getElementById("friendsTabsContainer");
     const friendsItemsList = document.getElementById("friendsItemsList");
     const progressText = document.getElementById("progressText");
     const clearAllBtn = document.getElementById("clearAllBtn");
@@ -319,7 +331,6 @@
           myItems.push({ id: docSnap.id, ...docSnap.data() });
         });
 
-        // מיון: פריטים שטרם סומנו למעלה, פריטים שסומנו לתחתית
         myItems.sort((a, b) => (a.isDone === b.isDone ? b.createdAt - a.createdAt : a.isDone ? 1 : -1));
 
         const doneCount = myItems.filter(i => i.isDone).length;
@@ -348,6 +359,7 @@
       const q = query(itemsRef, where("isPublic", "==", true));
       onSnapshot(q, (snapshot) => {
         friendsItemsList.innerHTML = "";
+        friendsTabsContainer.innerHTML = "";
         const grouped = {};
 
         snapshot.forEach((docSnap) => {
@@ -358,12 +370,34 @@
           }
         });
 
-        if (Object.keys(grouped).length === 0) {
+        const friendNames = Object.keys(grouped);
+
+        if (friendNames.length === 0) {
           friendsItemsList.innerHTML = "<p style='color:var(--gray); text-align:center;'>אין פריטים ציבוריים מחברים כרגע.</p>";
           return;
         }
 
-        for (const [friend, items] of Object.entries(grouped)) {
+        // יצירת לשוניות שמות
+        const allBtn = document.createElement("button");
+        allBtn.className = `friend-tab-chip ${selectedFriend === 'all' ? 'active' : ''}`;
+        allBtn.textContent = "הכל";
+        allBtn.onclick = () => { selectedFriend = 'all'; loadFriendsItems(); };
+        friendsTabsContainer.appendChild(allBtn);
+
+        friendNames.forEach(friend => {
+          const btn = document.createElement("button");
+          btn.className = `friend-tab-chip ${selectedFriend === friend ? 'active' : ''}`;
+          btn.textContent = friend;
+          btn.onclick = () => { selectedFriend = friend; loadFriendsItems(); };
+          friendsTabsContainer.appendChild(btn);
+        });
+
+        // הצגת הרשימה לפי הלשונית שנבחרה
+        const displayGrouped = selectedFriend === "all" ? grouped : { [selectedFriend]: grouped[selectedFriend] || [] };
+
+        for (const [friend, items] of Object.entries(displayGrouped)) {
+          if (!items || items.length === 0) continue;
+
           const sec = document.createElement("div");
           sec.className = "friend-section";
           sec.innerHTML = `
