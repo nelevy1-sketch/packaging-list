@@ -12,16 +12,24 @@
       --text: #0f172a;
       --border: #e2e8f0;
       --gray: #64748b;
+      --danger: #ef4444;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background-color: var(--bg); color: var(--text); padding: 16px; max-width: 600px; margin: 0 auto; }
     h1 { text-align: center; margin-bottom: 16px; font-size: 1.5rem; color: var(--primary); }
     
     .card { background: var(--card); padding: 16px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-    input, select, button { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); margin-top: 6px; font-size: 0.95rem; }
+    input, select, button { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); margin-top: 6px; font-size: 0.95rem; transition: border-color 0.2s; }
+    input.error { border-color: var(--danger) !important; background-color: #fef2f2; animation: shake 0.3s; }
     button { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; }
     button:active { opacity: 0.9; }
     
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      75% { transform: translateX(4px); }
+    }
+
     .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
     .tab-btn { flex: 1; background: #e2e8f0; color: var(--text); padding: 10px; border-radius: 8px; border: none; font-weight: bold; }
     .tab-btn.active { background: var(--primary); color: white; }
@@ -35,7 +43,7 @@
     .badge.public { background: #dbeafe; color: #1e40af; }
 
     .btn-sm { width: auto; padding: 6px 10px; font-size: 0.8rem; margin: 0; }
-    .btn-danger { background: #ef4444; }
+    .btn-danger { background: var(--danger); }
     .btn-import { background: #10b981; }
 
     .hidden { display: none !important; }
@@ -57,7 +65,7 @@
   <!-- מסך ראשי -->
   <div id="appContent" class="hidden">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-      <span>שלום, <strong id="displayName"></strong>!</span>
+      <span><span id="greetingText"></span>, <strong id="displayName"></strong>!</span>
       <button id="logoutBtn" class="btn-sm btn-danger" style="width: auto;">החלף שם</button>
     </div>
 
@@ -140,6 +148,7 @@
     const loginBtn = document.getElementById("loginBtn");
     const logoutBtn = document.getElementById("logoutBtn");
     const displayName = document.getElementById("displayName");
+    const greetingText = document.getElementById("greetingText");
 
     const myTabBtn = document.getElementById("myTabBtn");
     const friendsTabBtn = document.getElementById("friendsTabBtn");
@@ -154,9 +163,19 @@
 
     let myItems = [];
 
-    // הפשטת טקסט לצורך השוואה גמישה (הסרת אהו"י ורווחים)
+    // הפשטת טקסט לצורך השוואה גמישה
     function normalizeText(text) {
       return text.toLowerCase().replace(/[אהוי\s]/g, '');
+    }
+
+    // חישוב ברכה לפי שעה
+    function getGreeting() {
+      const hour = new Date().getHours();
+      if (hour >= 5 && hour < 12) return "בוקר טוב";
+      if (hour >= 12 && hour < 16) return "צהריים טובים";
+      if (hour >= 16 && hour < 19) return "אחר הצהריים טובים";
+      if (hour >= 19 && hour < 23) return "ערב טוב";
+      return "לילה טוב";
     }
 
     if (currentUser) {
@@ -181,6 +200,7 @@
       loginCard.classList.add("hidden");
       appContent.classList.remove("hidden");
       displayName.textContent = currentUser;
+      greetingText.textContent = getGreeting();
       loadMyItems();
       loadFriendsItems();
     }
@@ -199,9 +219,27 @@
       myListTab.classList.add("hidden");
     });
 
+    // הסרת סימון אדום בעת הקלדה
+    newItemName.addEventListener("input", () => {
+      newItemName.classList.remove("error");
+    });
+
     addItemBtn.addEventListener("click", async () => {
       const name = newItemName.value.trim();
-      if (!name) return;
+      
+      // סימון באדום כשהשדה ריק
+      if (!name) {
+        newItemName.classList.add("error");
+        return;
+      }
+
+      // בדיקת כפילויות
+      const normalizedInput = normalizeText(name);
+      const exists = myItems.some(i => normalizeText(i.name) === normalizedInput);
+      if (exists) {
+        alert(`הפריט "${name}" כבר קיים ברשימה שלך!`);
+        return;
+      }
 
       await addDoc(itemsRef, {
         name: name,
@@ -212,6 +250,7 @@
       });
 
       newItemName.value = "";
+      newItemName.classList.remove("error");
     });
 
     function loadMyItems() {
