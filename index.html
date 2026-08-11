@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>רשימת ציוד לטיול</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --border: #e2e8f0;
+      --gray: #64748b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 16px; max-width: 600px; margin: 0 auto; }
+    h1 { text-align: center; margin-bottom: 16px; font-size: 1.5rem; color: var(--primary); }
+    
+    .card { background: var(--card); padding: 16px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    input, select, button { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); margin-top: 6px; font-size: 0.95rem; }
+    button { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; }
+    button:active { opacity: 0.9; }
+    
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab-btn { flex: 1; background: #e2e8f0; color: var(--text); padding: 10px; border-radius: 8px; border: none; font-weight: bold; }
+    .tab-btn.active { background: var(--primary); color: white; }
+
+    .item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border); gap: 8px; }
+    .item:last-child { border-bottom: none; }
+    .item-title { flex: 1; }
+    .item.done .item-title { text-decoration: line-through; color: var(--gray); }
+    
+    .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 12px; background: #f1f5f9; color: var(--gray); border: none; width: auto; margin: 0; }
+    .badge.public { background: #dbeafe; color: #1e40af; }
+
+    .btn-sm { width: auto; padding: 6px 10px; font-size: 0.8rem; margin: 0; }
+    .btn-danger { background: #ef4444; }
+    .btn-import { background: #10b981; }
+
+    .hidden { display: none !important; }
+    .friend-section { margin-bottom: 20px; }
+    .friend-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 8px; color: #334155; border-bottom: 2px solid var(--primary); padding-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+  <h1>🎒 רשימת ציוד לטיול</h1>
+
+  <!-- מסך התחברות -->
+  <div id="loginCard" class="card">
+    <label>מי מתחבר/ת?</label>
+    <input type="text" id="userNameInput" placeholder="הכנס את שמך (למשל: נתנאל)">
+    <button id="loginBtn">התחבר לרשימה</button>
+  </div>
+
+  <!-- מסך ראשי -->
+  <div id="appContent" class="hidden">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <span>שלום, <strong id="displayName"></strong>!</span>
+      <button id="logoutBtn" class="btn-sm btn-danger" style="width: auto;">החלף שם</button>
+    </div>
+
+    <!-- בלשוניות -->
+    <div class="tabs">
+      <button class="tab-btn active" id="myTabBtn">הציוד שלי</button>
+      <button class="tab-btn" id="friendsTabBtn">רשימות חברים 🌐</button>
+    </div>
+
+    <!-- לשונית רשימה אישית -->
+    <div id="myListTab">
+      <div class="card">
+        <h3>הוספת פריט לרשימה</h3>
+        <input type="text" id="newItemName" placeholder="שם הפריט (למשל: מטען נייד)">
+        <select id="newItemVisibility">
+          <option value="private">🔒 פרטי (רק אני רואה)</option>
+          <option value="public">🌐 ציבורי (גלוי לחברים)</option>
+        </select>
+        <button id="addItemBtn">הוסף לרשימה</button>
+      </div>
+
+      <div class="card">
+        <h3>הציוד שלי</h3>
+        <div id="myItemsList">טוען...</div>
+      </div>
+    </div>
+
+    <!-- לשונית רשימות חברים -->
+    <div id="friendsListTab" class="hidden">
+      <div class="card">
+        <h3>רשימות ציבוריות של חברים</h3>
+        <p style="font-size: 0.85rem; color: var(--gray); margin-bottom: 12px;">תוכל לייבא פריטים שחברים שיתפו ישירות לרשימה שלך.</p>
+        <div id="friendsItemsList">טוען רשימות חברים...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // הגדרות Firebase שלך
+    const firebaseConfig = {
+      apiKey: "AIzaSyBqcKqWMJeMgU7m7-ful5aA6RXKkXF7Zl8",
+      authDomain: "trip-packing-list-d4319.firebaseapp.com",
+      projectId: "trip-packing-list-d4319",
+      storageBucket: "trip-packing-list-d4319.firebasestorage.app",
+      messagingSenderId: "916037561222",
+      appId: "1:916037561222:web:fbcbe319438aeb8af59a07",
+      measurementId: "G-M0C5EZCY25"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const itemsRef = collection(db, "packing_items");
+
+    let currentUser = localStorage.getItem("packing_app_user") || "";
+
+    // אלמנטים ב-DOM
+    const loginCard = document.getElementById("loginCard");
+    const appContent = document.getElementById("appContent");
+    const userNameInput = document.getElementById("userNameInput");
+    const loginBtn = document.getElementById("loginBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const displayName = document.getElementById("displayName");
+
+    const myTabBtn = document.getElementById("myTabBtn");
+    const friendsTabBtn = document.getElementById("friendsTabBtn");
+    const myListTab = document.getElementById("myListTab");
+    const friendsListTab = document.getElementById("friendsListTab");
+
+    const newItemName = document.getElementById("newItemName");
+    const newItemVisibility = document.getElementById("newItemVisibility");
+    const addItemBtn = document.getElementById("addItemBtn");
+    const myItemsList = document.getElementById("myItemsList");
+    const friendsItemsList = document.getElementById("friendsItemsList");
+
+    let myItems = [];
+
+    // בדיקת התחברות
+    if (currentUser) {
+      showApp();
+    }
+
+    loginBtn.addEventListener("click", () => {
+      const name = userNameInput.value.trim();
+      if (name) {
+        currentUser = name;
+        localStorage.setItem("packing_app_user", currentUser);
+        showApp();
+      }
+    });
+
+    logoutBtn.addEventListener("click", () => {
+      localStorage.removeItem("packing_app_user");
+      location.reload();
+    });
+
+    function showApp() {
+      loginCard.classList.add("hidden");
+      appContent.classList.remove("hidden");
+      displayName.textContent = currentUser;
+      loadMyItems();
+      loadFriendsItems();
+    }
+
+    // ניהול בלשוניות
+    myTabBtn.addEventListener("click", () => {
+      myTabBtn.classList.add("active");
+      friendsTabBtn.classList.remove("active");
+      myListTab.classList.remove("hidden");
+      friendsListTab.classList.add("hidden");
+    });
+
+    friendsTabBtn.addEventListener("click", () => {
+      friendsTabBtn.classList.add("active");
+      myTabBtn.classList.remove("active");
+      friendsListTab.classList.remove("hidden");
+      myListTab.classList.add("hidden");
+    });
+
+    // הוספת פריט
+    addItemBtn.addEventListener("click", async () => {
+      const name = newItemName.value.trim();
+      if (!name) return;
+
+      await addDoc(itemsRef, {
+        name: name,
+        owner: currentUser,
+        isPublic: newItemVisibility.value === "public",
+        isDone: false,
+        createdAt: Date.now()
+      });
+
+      newItemName.value = "";
+    });
+
+    // טעינת פריטים שלי בזמן אמת
+    function loadMyItems() {
+      const q = query(itemsRef, where("owner", "==", currentUser));
+      onSnapshot(q, (snapshot) => {
+        myItemsList.innerHTML = "";
+        myItems = [];
+        if (snapshot.empty) {
+          myItemsList.innerHTML = "<p style='color:var(--gray)'>הרשימה שלך ריקה עדיין.</p>";
+          return;
+        }
+
+        snapshot.forEach((docSnap) => {
+          const item = { id: docSnap.id, ...docSnap.data() };
+          myItems.push(item);
+          renderMyItem(item);
+        });
+      });
+    }
+
+    function renderMyItem(item) {
+      const div = document.createElement("div");
+      div.className = `item ${item.isDone ? 'done' : ''}`;
+      div.innerHTML = `
+        <input type="checkbox" ${item.isDone ? 'checked' : ''} style="width:auto; margin:0;" onchange="toggleDone('${item.id}', ${!item.isDone})">
+        <span class="item-title">${item.name}</span>
+        <button class="badge ${item.isPublic ? 'public' : ''}" onclick="toggleVisibility('${item.id}', ${!item.isPublic})">
+          ${item.isPublic ? '🌐 ציבורי' : '🔒 פרטי'}
+        </button>
+        <button class="btn-sm btn-danger" onclick="deleteItem('${item.id}')">✕</button>
+      `;
+      myItemsList.appendChild(div);
+    }
+
+    // טעינת רשימות חברים בזמן אמת
+    function loadFriendsItems() {
+      const q = query(itemsRef, where("isPublic", "==", true));
+      onSnapshot(q, (snapshot) => {
+        friendsItemsList.innerHTML = "";
+        const grouped = {};
+
+        snapshot.forEach((docSnap) => {
+          const item = { id: docSnap.id, ...docSnap.data() };
+          if (item.owner !== currentUser) {
+            if (!grouped[item.owner]) grouped[item.owner] = [];
+            grouped[item.owner].push(item);
+          }
+        });
+
+        if (Object.keys(grouped).length === 0) {
+          friendsItemsList.innerHTML = "<p style='color:var(--gray)'>אין פריטים ציבוריים מחברים כרגע.</p>";
+          return;
+        }
+
+        for (const [friend, items] of Object.entries(grouped)) {
+          const sec = document.createElement("div");
+          sec.className = "friend-section";
+          sec.innerHTML = `
+            <div class="friend-title">הרשימה של ${friend}</div>
+            <button class="btn-sm btn-import" style="margin-bottom:10px; width:100%;" onclick="importAll('${friend}')">ייבא את כל הרשימה של ${friend}</button>
+          `;
+
+          items.forEach(item => {
+            const exists = myItems.some(i => i.name.toLowerCase() === item.name.toLowerCase());
+            const itemDiv = document.createElement("div");
+            itemDiv.className = "item";
+            itemDiv.innerHTML = `
+              <span class="item-title">${item.name}</span>
+              ${exists 
+                ? `<span style="font-size:0.8rem; color:var(--gray);">קיים אצלך</span>` 
+                : `<button class="btn-sm btn-import" onclick="importSingle('${item.name}')">+ ייבא</button>`
+              }
+            `;
+            sec.appendChild(itemDiv);
+          });
+
+          friendsItemsList.appendChild(sec);
+        }
+      });
+    }
+
+    // פונקציות גלובליות לפעולות
+    window.toggleDone = async (id, isDone) => {
+      await updateDoc(doc(db, "packing_items", id), { isDone });
+    };
+
+    window.toggleVisibility = async (id, isPublic) => {
+      await updateDoc(doc(db, "packing_items", id), { isPublic });
+    };
+
+    window.deleteItem = async (id) => {
+      await deleteDoc(doc(db, "packing_items", id));
+    };
+
+    window.importSingle = async (itemName) => {
+      await addDoc(itemsRef, {
+        name: itemName,
+        owner: currentUser,
+        isPublic: false,
+        isDone: false,
+        createdAt: Date.now()
+      });
+    };
+
+    window.importAll = async (friendName) => {
+      const q = query(itemsRef, where("owner", "==", friendName), where("isPublic", "==", true));
+      // משיכת פריטים חד-פעמית
+      const snapshot = await window.getDocs ? window.getDocs(q) : null; 
+      // גישה מיועדת לייבוא מהיר
+      snapshot?.forEach(async (docSnap) => {
+        const data = docSnap.data();
+        const exists = myItems.some(i => i.name.toLowerCase() === data.name.toLowerCase());
+        if (!exists) {
+          await addDoc(itemsRef, {
+            name: data.name,
+            owner: currentUser,
+            isPublic: false,
+            isDone: false,
+            createdAt: Date.now()
+          });
+        }
+      });
+    };
+  </script>
+</body>
+</html>
