@@ -42,7 +42,6 @@
     .friend-tab-chip { width: auto; white-space: nowrap; padding: 6px 14px; border-radius: 20px; background: #e2e8f0; color: var(--text); font-size: 0.85rem; border: none; font-weight: 500; margin: 0; }
     .friend-tab-chip.active { background: var(--primary); color: white; }
 
-    /* הצעות שמות במסך התחברות */
     .existing-names-container { margin-top: 12px; }
     .existing-names-title { font-size: 0.8rem; color: var(--gray); margin-bottom: 6px; }
     .name-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -118,7 +117,9 @@
     <label>מי מתחבר/ת?</label>
     <input type="text" id="userNameInput" placeholder="הכנס שם או כינוי (למשל: נתנאל)">
     
-    <!-- הצעות שמות קיימים -->
+    <label style="margin-top:10px; display:block;">קוד PIN אישי (4 ספרות):</label>
+    <input type="password" id="userPinInput" placeholder="••••" maxlength="4" inputmode="numeric">
+
     <div id="existingNamesBox" class="existing-names-container hidden">
       <div class="existing-names-title">או בחר מתוך רשימות קיימות:</div>
       <div id="existingNamesChips" class="name-chips"></div>
@@ -198,7 +199,7 @@
   <!-- Firebase SDKs -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, where, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBqcKqWMJeMgU7m7-ful5aA6RXKkXF7Zl8",
@@ -213,6 +214,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const itemsRef = collection(db, "packing_items");
+    const usersRef = collection(db, "users_auth");
 
     let currentUser = (localStorage.getItem("packing_app_user") || "").trim();
     let selectedFriend = "all";
@@ -221,6 +223,7 @@
     const loginCard = document.getElementById("loginCard");
     const appContent = document.getElementById("appContent");
     const userNameInput = document.getElementById("userNameInput");
+    const userPinInput = document.getElementById("userPinInput");
     const existingNamesBox = document.getElementById("existingNamesBox");
     const existingNamesChips = document.getElementById("existingNamesChips");
     const loginBtn = document.getElementById("loginBtn");
@@ -246,7 +249,6 @@
 
     let myItems = [];
 
-    // טעינת שמות קיימים למסך ההתחברות
     async function fetchExistingUsers() {
       try {
         const snapshot = await getDocs(itemsRef);
@@ -264,7 +266,7 @@
             btn.textContent = name;
             btn.onclick = () => {
               userNameInput.value = name;
-              loginBtn.click();
+              userPinInput.focus();
             };
             existingNamesChips.appendChild(btn);
           });
@@ -275,16 +277,11 @@
       }
     }
 
-    // טעינת הצעות שמות מראש
     fetchExistingUsers();
 
     function triggerConfetti() {
       if (typeof confetti === "function") {
-        confetti({
-          particleCount: 120,
-          spread: 80,
-          origin: { y: 0.6 }
-        });
+        confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
       }
     }
 
@@ -311,16 +308,54 @@
       showApp();
     }
 
-    loginBtn.addEventListener("click", () => {
+    loginBtn.addEventListener("click", async () => {
       const name = userNameInput.value.trim();
-      if (name) {
+      const pin = userPinInput.value.trim();
+
+      if (!name) {
+        userNameInput.classList.add("error");
+        return;
+      }
+      if (!pin || pin.length !== 4) {
+        userPinInput.classList.add("error");
+        showToast("נא להזין קוד PIN בן 4 ספרות");
+        return;
+      }
+
+      // בדיקת PIN מול Firebase
+      const userDocRef = doc(db, "users_auth", name.toLowerCase());
+      const userSnap = await getDocs(query(usersRef, where("__name__", "==", name.toLowerCase())));
+
+      let isAuthSuccess = false;
+
+      if (!userSnap.empty) {
+        // משתמש קיים ב-auth
+        const userData = userSnap.docs[0].data();
+        if (userData.pin === pin) {
+          isAuthSuccess = true;
+        } else {
+          userPinInput.classList.add("error");
+          showToast("🔒 קוד PIN שגוי!");
+          return;
+        }
+      } else {
+        // משתמש חדש או משתמש קיים שעוד לא הגדיר PIN
+        await setDoc(userDocRef, { name: name, pin: pin });
+        isAuthSuccess = true;
+        showToast("🔒 קוד ה-PIN שלך הוגדר בהצלחה!");
+      }
+
+      if (isAuthSuccess) {
         currentUser = name;
         localStorage.setItem("packing_app_user", currentUser);
         showApp();
       }
     });
 
-    userNameInput.addEventListener("keypress", (e) => {
+    userNameInput.addEventListener("input", () => userNameInput.classList.remove("error"));
+    userPinInput.addEventListener("input", () => userPinInput.classList.remove("error"));
+
+    userPinInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") loginBtn.click();
     });
 
