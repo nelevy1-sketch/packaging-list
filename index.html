@@ -4,7 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>רשימת ציוד לטיול</title>
+
+  <!-- Google Analytics (GA4) Tag -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-M0C5EZCY25"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-M0C5EZCY25');
+  </script>
+
+  <!-- ספריית קונפטי -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
   <style>
     :root {
       --primary: #2563eb;
@@ -259,6 +271,18 @@
 
     let myItems = [];
 
+    // דיווח שם משתמש ל-Google Analytics
+    function trackAnalyticsLogin(userName) {
+      if (typeof window.gtag === 'function') {
+        window.gtag('set', 'user_properties', {
+          'user_name': userName
+        });
+        window.gtag('event', 'login_success', {
+          'user_name': userName
+        });
+      }
+    }
+
     // בדיקת תוקף סשן
     function checkSessionValid() {
       if (!currentUser || !loginExpiry) return false;
@@ -328,6 +352,7 @@
 
     if (checkSessionValid()) {
       showApp();
+      trackAnalyticsLogin(currentUser);
     }
 
     loginBtn.addEventListener("click", async () => {
@@ -366,12 +391,13 @@
 
       if (isAuthSuccess) {
         currentUser = name;
-        // חישוב תוקף: 30 יום עם "זכור אותי", 24 שעות בלעדיו
         const daysToKeep = rememberMeCheckbox.checked ? 30 : 1;
         const expiryTimestamp = Date.now() + (daysToKeep * 24 * 60 * 60 * 1000);
 
         localStorage.setItem("packing_app_user", currentUser);
         localStorage.setItem("packing_app_expiry", expiryTimestamp.toString());
+        
+        trackAnalyticsLogin(currentUser);
         showApp();
       }
     });
