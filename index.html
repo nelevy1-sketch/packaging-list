@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>רשימת ציוד לטיול</title>
+  <!-- ספריית קונפטי -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <style>
     :root {
       --primary: #2563eb;
@@ -36,7 +38,6 @@
     .tab-btn { flex: 1; background: #e2e8f0; color: var(--text); padding: 10px; border-radius: 8px; border: none; font-weight: bold; }
     .tab-btn.active { background: var(--primary); color: white; }
 
-    /* לשוניות משנה לחברים */
     .friends-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; scrollbar-width: none; }
     .friends-tabs::-webkit-scrollbar { display: none; }
     .friend-tab-chip { width: auto; white-space: nowrap; padding: 6px 14px; border-radius: 20px; background: #e2e8f0; color: var(--text); font-size: 0.85rem; border: none; font-weight: 500; margin: 0; }
@@ -61,7 +62,25 @@
     
     .progress-bar { font-size: 0.85rem; color: var(--gray); margin-bottom: 10px; text-align: center; font-weight: 500; }
 
-    /* Toast Notification */
+    /* באנר חופשה נעימה */
+    .finish-banner {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      text-align: center;
+      padding: 14px;
+      border-radius: 12px;
+      font-weight: bold;
+      font-size: 1.1rem;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+      animation: popIn 0.4s ease-out;
+    }
+
+    @keyframes popIn {
+      0% { transform: scale(0.8); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
     #toast {
       position: fixed;
       bottom: 20px;
@@ -104,7 +123,6 @@
       <button id="logoutBtn" class="btn-sm btn-danger" style="width: auto;">החלף שם</button>
     </div>
 
-    <!-- בלשוניות ראשיוֹת -->
     <div class="tabs">
       <button class="tab-btn active" id="myTabBtn">הציוד שלי</button>
       <button class="tab-btn" id="friendsTabBtn">רשימות חברים 🌐</button>
@@ -145,6 +163,12 @@
           <h3>הציוד שלי</h3>
           <button id="clearAllBtn" class="btn-sm btn-danger" style="display:none;">מחק את כל הרשימה</button>
         </div>
+        
+        <!-- באנר סיום אריזה -->
+        <div id="finishBanner" class="finish-banner hidden">
+          🥳 סיימת לארוז! חופשה נעימה גוש! ✈️🎉
+        </div>
+
         <div id="progressText" class="progress-bar"></div>
         <div id="myItemsList">טוען...</div>
       </div>
@@ -155,11 +179,7 @@
       <div class="card">
         <h3>רשימות ציבוריות של חברים</h3>
         <p style="font-size: 0.85rem; color: var(--gray); margin-bottom: 12px;">בחר חבר לצפייה ברשימה שלו וייבוא פריטים:</p>
-        
-        <!-- סרגל לשוניות שמות החברים -->
         <div id="friendsTabsContainer" class="friends-tabs"></div>
-        
-        <!-- תוכן הרשימה של החבר שנבחר -->
         <div id="friendsItemsList">טוען רשימות חברים...</div>
       </div>
     </div>
@@ -185,7 +205,8 @@
     const itemsRef = collection(db, "packing_items");
 
     let currentUser = (localStorage.getItem("packing_app_user") || "").trim();
-    let selectedFriend = "all"; // ברירת מחדל: הצג את כל החברים
+    let selectedFriend = "all";
+    let wasAllDoneBefore = false; // מעקב כדי להפעיל קונפטי רק בלחיצה המשלימה
 
     const loginCard = document.getElementById("loginCard");
     const appContent = document.getElementById("appContent");
@@ -208,9 +229,20 @@
     const friendsItemsList = document.getElementById("friendsItemsList");
     const progressText = document.getElementById("progressText");
     const clearAllBtn = document.getElementById("clearAllBtn");
+    const finishBanner = document.getElementById("finishBanner");
     const toast = document.getElementById("toast");
 
     let myItems = [];
+
+    function triggerConfetti() {
+      if (typeof confetti === "function") {
+        confetti({
+          particleCount: 120,
+          spread: 80,
+          origin: { y: 0.6 }
+        });
+      }
+    }
 
     function showToast(msg) {
       toast.textContent = msg;
@@ -324,6 +356,8 @@
           myItemsList.innerHTML = "<p style='color:var(--gray); text-align:center;'>הרשימה שלך ריקה עדיין.</p>";
           progressText.textContent = "";
           clearAllBtn.style.display = "none";
+          finishBanner.classList.add("hidden");
+          wasAllDoneBefore = false;
           return;
         }
 
@@ -334,8 +368,22 @@
         myItems.sort((a, b) => (a.isDone === b.isDone ? b.createdAt - a.createdAt : a.isDone ? 1 : -1));
 
         const doneCount = myItems.filter(i => i.isDone).length;
+        const isAllDone = myItems.length > 0 && doneCount === myItems.length;
+
         progressText.textContent = `נארזו ${doneCount} מתוך ${myItems.length} פריטים (${Math.round((doneCount/myItems.length)*100)}%)`;
         clearAllBtn.style.display = "inline-block";
+
+        // אם בדיוק עכשיו סיימנו לארוז את כל הרשימה
+        if (isAllDone) {
+          finishBanner.classList.remove("hidden");
+          if (!wasAllDoneBefore) {
+            triggerConfetti();
+            wasAllDoneBefore = true;
+          }
+        } else {
+          finishBanner.classList.add("hidden");
+          wasAllDoneBefore = false;
+        }
 
         myItems.forEach(renderMyItem);
       });
@@ -377,7 +425,6 @@
           return;
         }
 
-        // יצירת לשוניות שמות
         const allBtn = document.createElement("button");
         allBtn.className = `friend-tab-chip ${selectedFriend === 'all' ? 'active' : ''}`;
         allBtn.textContent = "הכל";
@@ -392,7 +439,6 @@
           friendsTabsContainer.appendChild(btn);
         });
 
-        // הצגת הרשימה לפי הלשונית שנבחרה
         const displayGrouped = selectedFriend === "all" ? grouped : { [selectedFriend]: grouped[selectedFriend] || [] };
 
         for (const [friend, items] of Object.entries(displayGrouped)) {
