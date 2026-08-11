@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>רשימת ציוד לטיול</title>
-  <!-- ספריית קונפטי -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <style>
     :root {
@@ -43,6 +42,12 @@
     .friend-tab-chip { width: auto; white-space: nowrap; padding: 6px 14px; border-radius: 20px; background: #e2e8f0; color: var(--text); font-size: 0.85rem; border: none; font-weight: 500; margin: 0; }
     .friend-tab-chip.active { background: var(--primary); color: white; }
 
+    /* הצעות שמות במסך התחברות */
+    .existing-names-container { margin-top: 12px; }
+    .existing-names-title { font-size: 0.8rem; color: var(--gray); margin-bottom: 6px; }
+    .name-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .name-chip { width: auto; padding: 5px 12px; border-radius: 16px; background: #dbeafe; color: #1e40af; font-size: 0.85rem; border: none; margin: 0; font-weight: 500; }
+
     .item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border); gap: 8px; }
     .item:last-child { border-bottom: none; }
     .item-title { flex: 1; }
@@ -62,7 +67,6 @@
     
     .progress-bar { font-size: 0.85rem; color: var(--gray); margin-bottom: 10px; text-align: center; font-weight: 500; }
 
-    /* באנר חופשה נעימה */
     .finish-banner {
       background: linear-gradient(135deg, #10b981, #059669);
       color: white;
@@ -112,7 +116,14 @@
   <!-- מסך התחברות -->
   <div id="loginCard" class="card">
     <label>מי מתחבר/ת?</label>
-    <input type="text" id="userNameInput" placeholder="הכנס את שמך (למשל: נתנאל)">
+    <input type="text" id="userNameInput" placeholder="הכנס שם או כינוי (למשל: נתנאל)">
+    
+    <!-- הצעות שמות קיימים -->
+    <div id="existingNamesBox" class="existing-names-container hidden">
+      <div class="existing-names-title">או בחר מתוך רשימות קיימות:</div>
+      <div id="existingNamesChips" class="name-chips"></div>
+    </div>
+
     <button id="loginBtn">התחבר לרשימה</button>
   </div>
 
@@ -163,8 +174,7 @@
           <h3>הציוד שלי</h3>
           <button id="clearAllBtn" class="btn-sm btn-danger" style="display:none;">מחק את כל הרשימה</button>
         </div>
-        
-        <!-- באנר סיום אריזה -->
+
         <div id="finishBanner" class="finish-banner hidden">
           🥳 סיימת לארוז! חופשה נעימה גוש! ✈️🎉
         </div>
@@ -206,11 +216,13 @@
 
     let currentUser = (localStorage.getItem("packing_app_user") || "").trim();
     let selectedFriend = "all";
-    let wasAllDoneBefore = false; // מעקב כדי להפעיל קונפטי רק בלחיצה המשלימה
+    let wasAllDoneBefore = false;
 
     const loginCard = document.getElementById("loginCard");
     const appContent = document.getElementById("appContent");
     const userNameInput = document.getElementById("userNameInput");
+    const existingNamesBox = document.getElementById("existingNamesBox");
+    const existingNamesChips = document.getElementById("existingNamesChips");
     const loginBtn = document.getElementById("loginBtn");
     const logoutBtn = document.getElementById("logoutBtn");
     const displayName = document.getElementById("displayName");
@@ -233,6 +245,38 @@
     const toast = document.getElementById("toast");
 
     let myItems = [];
+
+    // טעינת שמות קיימים למסך ההתחברות
+    async function fetchExistingUsers() {
+      try {
+        const snapshot = await getDocs(itemsRef);
+        const names = new Set();
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.owner) names.add(data.owner.trim());
+        });
+
+        if (names.size > 0) {
+          existingNamesChips.innerHTML = "";
+          names.forEach(name => {
+            const btn = document.createElement("button");
+            btn.className = "name-chip";
+            btn.textContent = name;
+            btn.onclick = () => {
+              userNameInput.value = name;
+              loginBtn.click();
+            };
+            existingNamesChips.appendChild(btn);
+          });
+          existingNamesBox.classList.remove("hidden");
+        }
+      } catch (err) {
+        console.log("Error fetching names", err);
+      }
+    }
+
+    // טעינת הצעות שמות מראש
+    fetchExistingUsers();
 
     function triggerConfetti() {
       if (typeof confetti === "function") {
@@ -373,7 +417,6 @@
         progressText.textContent = `נארזו ${doneCount} מתוך ${myItems.length} פריטים (${Math.round((doneCount/myItems.length)*100)}%)`;
         clearAllBtn.style.display = "inline-block";
 
-        // אם בדיוק עכשיו סיימנו לארוז את כל הרשימה
         if (isAllDone) {
           finishBanner.classList.remove("hidden");
           if (!wasAllDoneBefore) {
