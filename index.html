@@ -33,6 +33,9 @@
       75% { transform: translateX(4px); }
     }
 
+    .remember-me { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.85rem; color: var(--gray); }
+    .remember-me input { width: auto; margin: 0; }
+
     .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
     .tab-btn { flex: 1; background: #e2e8f0; color: var(--text); padding: 10px; border-radius: 8px; border: none; font-weight: bold; }
     .tab-btn.active { background: var(--primary); color: white; }
@@ -119,6 +122,11 @@
     
     <label style="margin-top:10px; display:block;">קוד PIN אישי (4 ספרות):</label>
     <input type="password" id="userPinInput" placeholder="••••" maxlength="4" inputmode="numeric">
+
+    <div class="remember-me">
+      <input type="checkbox" id="rememberMeCheckbox" checked>
+      <label for="rememberMeCheckbox">זכור אותי במכשיר זה (ל-30 יום)</label>
+    </div>
 
     <div id="existingNamesBox" class="existing-names-container hidden">
       <div class="existing-names-title">או בחר מתוך רשימות קיימות:</div>
@@ -217,6 +225,7 @@
     const usersRef = collection(db, "users_auth");
 
     let currentUser = (localStorage.getItem("packing_app_user") || "").trim();
+    let loginExpiry = localStorage.getItem("packing_app_expiry");
     let selectedFriend = "all";
     let wasAllDoneBefore = false;
 
@@ -224,6 +233,7 @@
     const appContent = document.getElementById("appContent");
     const userNameInput = document.getElementById("userNameInput");
     const userPinInput = document.getElementById("userPinInput");
+    const rememberMeCheckbox = document.getElementById("rememberMeCheckbox");
     const existingNamesBox = document.getElementById("existingNamesBox");
     const existingNamesChips = document.getElementById("existingNamesChips");
     const loginBtn = document.getElementById("loginBtn");
@@ -248,6 +258,18 @@
     const toast = document.getElementById("toast");
 
     let myItems = [];
+
+    // בדיקת תוקף סשן
+    function checkSessionValid() {
+      if (!currentUser || !loginExpiry) return false;
+      const now = Date.now();
+      if (now > parseInt(loginExpiry, 10)) {
+        localStorage.removeItem("packing_app_user");
+        localStorage.removeItem("packing_app_expiry");
+        return false;
+      }
+      return true;
+    }
 
     async function fetchExistingUsers() {
       try {
@@ -304,7 +326,7 @@
       return "לילה טוב";
     }
 
-    if (currentUser) {
+    if (checkSessionValid()) {
       showApp();
     }
 
@@ -322,14 +344,12 @@
         return;
       }
 
-      // בדיקת PIN מול Firebase
       const userDocRef = doc(db, "users_auth", name.toLowerCase());
       const userSnap = await getDocs(query(usersRef, where("__name__", "==", name.toLowerCase())));
 
       let isAuthSuccess = false;
 
       if (!userSnap.empty) {
-        // משתמש קיים ב-auth
         const userData = userSnap.docs[0].data();
         if (userData.pin === pin) {
           isAuthSuccess = true;
@@ -339,7 +359,6 @@
           return;
         }
       } else {
-        // משתמש חדש או משתמש קיים שעוד לא הגדיר PIN
         await setDoc(userDocRef, { name: name, pin: pin });
         isAuthSuccess = true;
         showToast("🔒 קוד ה-PIN שלך הוגדר בהצלחה!");
@@ -347,7 +366,12 @@
 
       if (isAuthSuccess) {
         currentUser = name;
+        // חישוב תוקף: 30 יום עם "זכור אותי", 24 שעות בלעדיו
+        const daysToKeep = rememberMeCheckbox.checked ? 30 : 1;
+        const expiryTimestamp = Date.now() + (daysToKeep * 24 * 60 * 60 * 1000);
+
         localStorage.setItem("packing_app_user", currentUser);
+        localStorage.setItem("packing_app_expiry", expiryTimestamp.toString());
         showApp();
       }
     });
@@ -361,6 +385,7 @@
 
     logoutBtn.addEventListener("click", () => {
       localStorage.removeItem("packing_app_user");
+      localStorage.removeItem("packing_app_expiry");
       location.reload();
     });
 
