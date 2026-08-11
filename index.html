@@ -23,6 +23,7 @@
     input.error { border-color: var(--danger) !important; background-color: #fef2f2; animation: shake 0.3s; }
     button { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; }
     button:active { opacity: 0.9; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
     
     @keyframes shake {
       0%, 100% { transform: translateX(0); }
@@ -163,12 +164,10 @@
 
     let myItems = [];
 
-    // הפשטת טקסט לצורך השוואה גמישה
     function normalizeText(text) {
       return text.toLowerCase().replace(/[אהוי\s]/g, '');
     }
 
-    // חישוב ברכה לפי שעה
     function getGreeting() {
       const hour = new Date().getHours();
       if (hour >= 5 && hour < 12) return "בוקר טוב";
@@ -191,7 +190,6 @@
       }
     });
 
-    // התחברות גם בלחיצה על Enter במסך ההתחברות
     userNameInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
         loginBtn.click();
@@ -226,12 +224,10 @@
       myListTab.classList.add("hidden");
     });
 
-    // הסרת סימון אדום בעת הקלדה
     newItemName.addEventListener("input", () => {
       newItemName.classList.remove("error");
     });
 
-    // לחיצה על Enter בשדה הפריט
     newItemName.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -242,14 +238,12 @@
     addItemBtn.addEventListener("click", async () => {
       const name = newItemName.value.trim();
       
-      // סימון באדום כשהשדה ריק
       if (!name) {
         newItemName.classList.add("error");
         newItemName.focus();
         return;
       }
 
-      // בדיקת כפילויות
       const normalizedInput = normalizeText(name);
       const exists = myItems.some(i => normalizeText(i.name) === normalizedInput);
       if (exists) {
@@ -268,7 +262,7 @@
 
       newItemName.value = "";
       newItemName.classList.remove("error");
-      newItemName.focus(); // החזרת המיקוד לשדה ההקלדה מיד לאחר ההוספה
+      newItemName.focus();
     });
 
     function loadMyItems() {
@@ -327,7 +321,7 @@
           sec.className = "friend-section";
           sec.innerHTML = `
             <div class="friend-title">הרשימה של ${friend}</div>
-            <button class="btn-sm btn-import" style="margin-bottom:10px; width:100%;" onclick="importAll('${friend}')">ייבא את כל הרשימה של ${friend}</button>
+            <button class="btn-sm btn-import" style="margin-bottom:10px; width:100%;" onclick="importAll('${friend}', this)">ייבא את כל הרשימה של ${friend}</button>
           `;
 
           items.forEach(item => {
@@ -338,11 +332,11 @@
             const itemDiv = document.createElement("div");
             itemDiv.className = "item";
             
-            let statusMarkup = `<button class="btn-sm btn-import" onclick="importSingle('${item.name}')">+ ייבא</button>`;
+            let statusMarkup = `<button class="btn-sm btn-import" onclick="importSingle('${item.name}', this)">+ ייבא</button>`;
             if (exactExists) {
               statusMarkup = `<span style="font-size:0.8rem; color:var(--gray);">קיים אצלך</span>`;
             } else if (similarExists) {
-              statusMarkup = `<button class="btn-sm btn-import" style="background:#f59e0b;" onclick="importSingle('${item.name}')">+ קיים דומה (ייבא בכל זאת)</button>`;
+              statusMarkup = `<button class="btn-sm btn-import" style="background:#f59e0b;" onclick="importSingle('${item.name}', this)">+ קיים דומה (ייבא בכל זאת)</button>`;
             }
 
             itemDiv.innerHTML = `
@@ -369,7 +363,13 @@
       await deleteDoc(doc(db, "packing_items", id));
     };
 
-    window.importSingle = async (itemName) => {
+    window.importSingle = async (itemName, btnElement) => {
+      if (btnElement) {
+        btnElement.disabled = true;
+        btnElement.textContent = "...מייבא";
+        btnElement.style.background = "var(--gray)";
+      }
+
       await addDoc(itemsRef, {
         name: itemName,
         owner: currentUser,
@@ -379,10 +379,16 @@
       });
     };
 
-    window.importAll = async (friendName) => {
+    window.importAll = async (friendName, btnElement) => {
+      if (btnElement) {
+        btnElement.disabled = true;
+        btnElement.textContent = `...מייבא את כל הרשימה של ${friendName}`;
+        btnElement.style.background = "var(--gray)";
+      }
+
       const q = query(itemsRef, where("owner", "==", friendName), where("isPublic", "==", true));
       const snapshot = await getDocs(q);
-      snapshot.forEach(async (docSnap) => {
+      for (const docSnap of snapshot.docs) {
         const data = docSnap.data();
         const exists = myItems.some(i => i.name.toLowerCase() === data.name.toLowerCase());
         if (!exists) {
@@ -394,7 +400,7 @@
             createdAt: Date.now()
           });
         }
-      });
+      }
     };
   </script>
 </body>
