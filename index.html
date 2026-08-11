@@ -13,9 +13,10 @@
       --border: #e2e8f0;
       --gray: #64748b;
       --danger: #ef4444;
+      --success: #10b981;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-    body { background-color: var(--bg); color: var(--text); padding: 16px; max-width: 600px; margin: 0 auto; }
+    body { background-color: var(--bg); color: var(--text); padding: 16px; max-width: 600px; margin: 0 auto; padding-bottom: 80px; }
     h1 { text-align: center; margin-bottom: 16px; font-size: 1.5rem; color: var(--primary); }
     
     .card { background: var(--card); padding: 16px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
@@ -38,6 +39,7 @@
     .item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border); gap: 8px; }
     .item:last-child { border-bottom: none; }
     .item-title { flex: 1; }
+    .item.done { opacity: 0.6; background-color: #f1f5f9; }
     .item.done .item-title { text-decoration: line-through; color: var(--gray); }
     
     .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 12px; background: #f1f5f9; color: var(--gray); border: none; width: auto; margin: 0; }
@@ -45,16 +47,43 @@
 
     .btn-sm { width: auto; padding: 6px 10px; font-size: 0.8rem; margin: 0; }
     .btn-danger { background: var(--danger); }
-    .btn-import { background: #10b981; }
+    .btn-import { background: var(--success); }
 
     .hidden { display: none !important; }
     .friend-section { margin-bottom: 20px; }
     .friend-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 8px; color: #334155; border-bottom: 2px solid var(--primary); padding-bottom: 4px; }
+    
+    .progress-bar { font-size: 0.85rem; color: var(--gray); margin-bottom: 10px; text-align: center; font-weight: 500; }
+
+    /* Toast Notification */
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f172a;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s, transform 0.3s;
+      pointer-events: none;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-5px);
+    }
   </style>
 </head>
 <body>
 
   <h1>🎒 רשימת ציוד לטיול</h1>
+
+  <!-- Toast -->
+  <div id="toast"></div>
 
   <!-- מסך התחברות -->
   <div id="loginCard" class="card">
@@ -107,7 +136,11 @@
       </div>
 
       <div class="card">
-        <h3>הציוד שלי</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <h3>הציוד שלי</h3>
+          <button id="clearAllBtn" class="btn-sm btn-danger" style="display:none;">מחק את כל הרשימה</button>
+        </div>
+        <div id="progressText" class="progress-bar"></div>
         <div id="myItemsList">טוען...</div>
       </div>
     </div>
@@ -141,7 +174,7 @@
     const db = getFirestore(app);
     const itemsRef = collection(db, "packing_items");
 
-    let currentUser = localStorage.getItem("packing_app_user") || "";
+    let currentUser = (localStorage.getItem("packing_app_user") || "").trim();
 
     const loginCard = document.getElementById("loginCard");
     const appContent = document.getElementById("appContent");
@@ -161,8 +194,17 @@
     const addItemBtn = document.getElementById("addItemBtn");
     const myItemsList = document.getElementById("myItemsList");
     const friendsItemsList = document.getElementById("friendsItemsList");
+    const progressText = document.getElementById("progressText");
+    const clearAllBtn = document.getElementById("clearAllBtn");
+    const toast = document.getElementById("toast");
 
     let myItems = [];
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 2500);
+    }
 
     function normalizeText(text) {
       return text.toLowerCase().replace(/[אהוי\s]/g, '');
@@ -191,9 +233,7 @@
     });
 
     userNameInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
-        loginBtn.click();
-      }
+      if (e.key === "Enter") loginBtn.click();
     });
 
     logoutBtn.addEventListener("click", () => {
@@ -224,9 +264,7 @@
       myListTab.classList.add("hidden");
     });
 
-    newItemName.addEventListener("input", () => {
-      newItemName.classList.remove("error");
-    });
+    newItemName.addEventListener("input", () => newItemName.classList.remove("error"));
 
     newItemName.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
@@ -247,7 +285,7 @@
       const normalizedInput = normalizeText(name);
       const exists = myItems.some(i => normalizeText(i.name) === normalizedInput);
       if (exists) {
-        alert(`הפריט "${name}" כבר קיים ברשימה שלך!`);
+        showToast(`הפריט "${name}" כבר קיים ברשימה!`);
         newItemName.focus();
         return;
       }
@@ -260,8 +298,8 @@
         createdAt: Date.now()
       });
 
+      showToast(`✨ "${name}" נוצר בהצלחה`);
       newItemName.value = "";
-      newItemName.classList.remove("error");
       newItemName.focus();
     });
 
@@ -271,15 +309,24 @@
         myItemsList.innerHTML = "";
         myItems = [];
         if (snapshot.empty) {
-          myItemsList.innerHTML = "<p style='color:var(--gray)'>הרשימה שלך ריקה עדיין.</p>";
+          myItemsList.innerHTML = "<p style='color:var(--gray); text-align:center;'>הרשימה שלך ריקה עדיין.</p>";
+          progressText.textContent = "";
+          clearAllBtn.style.display = "none";
           return;
         }
 
         snapshot.forEach((docSnap) => {
-          const item = { id: docSnap.id, ...docSnap.data() };
-          myItems.push(item);
-          renderMyItem(item);
+          myItems.push({ id: docSnap.id, ...docSnap.data() });
         });
+
+        // מיון: פריטים שטרם סומנו למעלה, פריטים שסומנו לתחתית
+        myItems.sort((a, b) => (a.isDone === b.isDone ? b.createdAt - a.createdAt : a.isDone ? 1 : -1));
+
+        const doneCount = myItems.filter(i => i.isDone).length;
+        progressText.textContent = `נארזו ${doneCount} מתוך ${myItems.length} פריטים (${Math.round((doneCount/myItems.length)*100)}%)`;
+        clearAllBtn.style.display = "inline-block";
+
+        myItems.forEach(renderMyItem);
       });
     }
 
@@ -292,7 +339,7 @@
         <button class="badge ${item.isPublic ? 'public' : ''}" onclick="toggleVisibility('${item.id}', ${!item.isPublic})">
           ${item.isPublic ? '🌐 ציבורי' : '🔒 פרטי'}
         </button>
-        <button class="btn-sm btn-danger" onclick="deleteItem('${item.id}')">✕</button>
+        <button class="btn-sm btn-danger" onclick="deleteItem('${item.id}', '${item.name}')">✕</button>
       `;
       myItemsList.appendChild(div);
     }
@@ -312,7 +359,7 @@
         });
 
         if (Object.keys(grouped).length === 0) {
-          friendsItemsList.innerHTML = "<p style='color:var(--gray)'>אין פריטים ציבוריים מחברים כרגע.</p>";
+          friendsItemsList.innerHTML = "<p style='color:var(--gray); text-align:center;'>אין פריטים ציבוריים מחברים כרגע.</p>";
           return;
         }
 
@@ -359,9 +406,23 @@
       await updateDoc(doc(db, "packing_items", id), { isPublic });
     };
 
-    window.deleteItem = async (id) => {
-      await deleteDoc(doc(db, "packing_items", id));
+    window.deleteItem = async (id, name) => {
+      if (confirm(`למחוק את "${name}" מהרשימה?`)) {
+        await deleteDoc(doc(db, "packing_items", id));
+        showToast(`"${name}" נמחק`);
+      }
     };
+
+    clearAllBtn.addEventListener("click", async () => {
+      if (confirm("האם אתה בטוח שברצונך למחוק את כל הרשימה שלך?")) {
+        const q = query(itemsRef, where("owner", "==", currentUser));
+        const snapshot = await getDocs(q);
+        snapshot.forEach(async (docSnap) => {
+          await deleteDoc(doc(db, "packing_items", docSnap.id));
+        });
+        showToast("כל הרשימה נמחקה");
+      }
+    });
 
     window.importSingle = async (itemName, btnElement) => {
       if (btnElement) {
@@ -377,17 +438,19 @@
         isDone: false,
         createdAt: Date.now()
       });
+      showToast(`הפריט "${itemName}" יובא בהצלחה!`);
     };
 
     window.importAll = async (friendName, btnElement) => {
       if (btnElement) {
         btnElement.disabled = true;
-        btnElement.textContent = `...מייבא את כל הרשימה של ${friendName}`;
+        btnElement.textContent = `...מייבא רשימה`;
         btnElement.style.background = "var(--gray)";
       }
 
       const q = query(itemsRef, where("owner", "==", friendName), where("isPublic", "==", true));
       const snapshot = await getDocs(q);
+      let count = 0;
       for (const docSnap of snapshot.docs) {
         const data = docSnap.data();
         const exists = myItems.some(i => i.name.toLowerCase() === data.name.toLowerCase());
@@ -399,8 +462,10 @@
             isDone: false,
             createdAt: Date.now()
           });
+          count++;
         }
       }
+      showToast(`יובאו ${count} פריטים מהרשימה של ${friendName}`);
     };
   </script>
 </body>
