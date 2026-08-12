@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
@@ -26,9 +25,9 @@
       --text: #0f172a;
       --border: #e2e8f0;
       --gray: #64748b;
+      --gray-light: #94a3b8;
       --danger: #ef4444;
       --success: #10b981;
-      --warning: #f59e0b;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background-color: var(--bg); color: var(--text); padding: 16px; max-width: 600px; margin: 0 auto; padding-bottom: 80px; }
@@ -64,17 +63,38 @@
     .name-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .name-chip { width: auto; padding: 5px 12px; border-radius: 16px; background: #dbeafe; color: #1e40af; font-size: 0.85rem; border: none; margin: 0; font-weight: 500; }
 
-    .item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border); gap: 6px; }
+    .item { display: flex; align-items: center; justify-content: space-between; padding: 12px 6px; border-bottom: 1px solid var(--border); gap: 12px; }
     .item:last-child { border-bottom: none; }
-    .item-title { flex: 1; word-break: break-word; }
-    .item.done { opacity: 0.6; background-color: #f1f5f9; }
+    .item-title { flex: 1; word-break: break-word; font-size: 0.95rem; }
+    .item.done { opacity: 0.55; background-color: #f8fafc; }
     .item.done .item-title { text-decoration: line-through; color: var(--gray); }
     
+    .item-actions { display: flex; align-items: center; gap: 12px; }
+
     .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 12px; background: #f1f5f9; color: var(--gray); border: none; width: auto; margin: 0; }
     .badge.public { background: #dbeafe; color: #1e40af; }
 
+    /* אייקונים מעודנים עם שטח נגיעה מוגדל (Touch Target) */
+    .icon-btn {
+      background: none;
+      border: none;
+      padding: 8px;
+      width: 36px;
+      height: 36px;
+      margin: 0;
+      color: var(--gray-light);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      transition: color 0.2s, background-color 0.2s;
+    }
+    .icon-btn:hover, .icon-btn:active { color: var(--text); background-color: #f1f5f9; }
+    .icon-btn.danger:hover, .icon-btn.danger:active { color: var(--danger); background-color: #fef2f2; }
+    .icon-btn svg { width: 18px; height: 18px; stroke-width: 2; }
+
     .btn-sm { width: auto; padding: 6px 10px; font-size: 0.8rem; margin: 0; }
-    .btn-edit { background: #64748b; }
     .btn-danger { background: var(--danger); }
     .btn-import { background: var(--success); }
 
@@ -336,10 +356,9 @@
       setTimeout(() => toast.classList.remove("show"), 3000);
     }
 
-    // נרמול טקסט מתקדם להשוואת פריטים ושגיאות כתיב
     function normalizeText(text) {
       return text.trim().toLowerCase()
-        .replace(/[אהוי\s\-_',."]/g, ''); // הסרת תנועות אהו"י, רווחים וסימני פיסוק
+        .replace(/['’׳"״`\-_.,\s]/g, '');
     }
 
     function getGreeting() {
@@ -457,24 +476,14 @@
         return;
       }
 
-      // 1. בדיקת התאמה מדויקת
-      const exactExists = myItems.some(i => i.name.trim().toLowerCase() === name.toLowerCase());
-      if (exactExists) {
+      const normalizedInput = normalizeText(name);
+
+      const existingItem = myItems.find(i => normalizeText(i.name) === normalizedInput);
+      if (existingItem) {
         newItemName.classList.add("error");
-        showToast(`⚠️ הפריט "${name}" כבר קיים ברשימה שלך!`);
+        showToast(`⚠️ הפריט "${existingItem.name}" כבר קיים ברשימה שלך!`);
         newItemName.focus();
         return;
-      }
-
-      // 2. בדיקת דמיון/שגיאות כתיב (נרמול)
-      const normalizedInput = normalizeText(name);
-      const similarItem = myItems.find(i => normalizeText(i.name) === normalizedInput || normalizeText(i.name).includes(normalizedInput) || normalizedInput.includes(normalizeText(i.name)));
-
-      if (similarItem && normalizedInput.length > 2) {
-        if (!confirm(`קיים כבר פריט דומה ברשימה שלך: "${similarItem.name}". האם להוסיף את "${name}" בכל זאת?`)) {
-          newItemName.focus();
-          return;
-        }
       }
 
       await addDoc(itemsRef, {
@@ -537,11 +546,17 @@
       div.innerHTML = `
         <input type="checkbox" ${item.isDone ? 'checked' : ''} style="width:auto; margin:0;" onchange="toggleDone('${item.id}', ${!item.isDone})">
         <span class="item-title">${item.name}</span>
-        <button class="badge ${item.isPublic ? 'public' : ''}" onclick="toggleVisibility('${item.id}', ${!item.isPublic})">
-          ${item.isPublic ? '🌐 ציבורי' : '🔒 פרטי'}
-        </button>
-        <button class="btn-sm btn-edit" title="ערוך פריט" onclick="editItem('${item.id}', '${item.name}')">✏️</button>
-        <button class="btn-sm btn-danger" title="מחק פריט" onclick="deleteItem('${item.id}', '${item.name}')">✕</button>
+        <div class="item-actions">
+          <button class="badge ${item.isPublic ? 'public' : ''}" onclick="toggleVisibility('${item.id}', ${!item.isPublic})">
+            ${item.isPublic ? '🌐 ציבורי' : '🔒 פרטי'}
+          </button>
+          <button class="icon-btn" title="ערוך פריט" onclick="editItem('${item.id}', '${item.name.replace(/'/g, "\\'")}')">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          </button>
+          <button class="icon-btn danger" title="מחק פריט" onclick="deleteItem('${item.id}', '${item.name.replace(/'/g, "\\'")}')">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+          </button>
+        </div>
       `;
       myItemsList.appendChild(div);
     }
@@ -596,17 +611,14 @@
 
           items.forEach(item => {
             const normalizedFriendItem = normalizeText(item.name);
-            const exactExists = myItems.some(i => i.name.toLowerCase() === item.name.toLowerCase());
-            const similarExists = !exactExists && myItems.some(i => normalizeText(i.name) === normalizedFriendItem);
+            const exactExists = myItems.some(i => normalizeText(i.name) === normalizedFriendItem);
 
             const itemDiv = document.createElement("div");
             itemDiv.className = "item";
             
-            let statusMarkup = `<button class="btn-sm btn-import" onclick="importSingle('${item.name}', this)">+ ייבא</button>`;
+            let statusMarkup = `<button class="btn-sm btn-import" onclick="importSingle('${item.name.replace(/'/g, "\\'")}', this)">+ ייבא</button>`;
             if (exactExists) {
               statusMarkup = `<span style="font-size:0.8rem; color:var(--gray);">קיים אצלך</span>`;
-            } else if (similarExists) {
-              statusMarkup = `<button class="btn-sm btn-import" style="background:#f59e0b;" onclick="importSingle('${item.name}', this)">+ קיים דומה (ייבא בכל זאת)</button>`;
             }
 
             itemDiv.innerHTML = `
@@ -633,7 +645,8 @@
       const newName = prompt("ערוך את שם הפריט:", oldName);
       if (newName !== null && newName.trim() !== "" && newName.trim() !== oldName) {
         const trimmedName = newName.trim();
-        const exists = myItems.some(i => i.id !== id && i.name.toLowerCase() === trimmedName.toLowerCase());
+        const normalizedNew = normalizeText(trimmedName);
+        const exists = myItems.some(i => i.id !== id && normalizeText(i.name) === normalizedNew);
         if (exists) {
           showToast(`⚠️ כבר קיים פריט בשם "${trimmedName}" ברשימה שלך`);
           return;
@@ -690,7 +703,7 @@
       let count = 0;
       for (const docSnap of snapshot.docs) {
         const data = docSnap.data();
-        const exists = myItems.some(i => i.name.toLowerCase() === data.name.toLowerCase());
+        const exists = myItems.some(i => normalizeText(i.name) === normalizeText(data.name));
         if (!exists) {
           await addDoc(itemsRef, {
             name: data.name,
