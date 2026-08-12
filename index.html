@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
@@ -5,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>רשימת ציוד לטיול</title>
 
-  <!-- Google Analytics (GA4) Tag - מופיע פעם אחת בלבד -->
+  <!-- Google Analytics (GA4) Tag -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-M0C5EZCY25"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -27,6 +28,7 @@
       --gray: #64748b;
       --danger: #ef4444;
       --success: #10b981;
+      --warning: #f59e0b;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background-color: var(--bg); color: var(--text); padding: 16px; max-width: 600px; margin: 0 auto; padding-bottom: 80px; }
@@ -62,9 +64,9 @@
     .name-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .name-chip { width: auto; padding: 5px 12px; border-radius: 16px; background: #dbeafe; color: #1e40af; font-size: 0.85rem; border: none; margin: 0; font-weight: 500; }
 
-    .item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border); gap: 8px; }
+    .item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border); gap: 6px; }
     .item:last-child { border-bottom: none; }
-    .item-title { flex: 1; }
+    .item-title { flex: 1; word-break: break-word; }
     .item.done { opacity: 0.6; background-color: #f1f5f9; }
     .item.done .item-title { text-decoration: line-through; color: var(--gray); }
     
@@ -72,6 +74,7 @@
     .badge.public { background: #dbeafe; color: #1e40af; }
 
     .btn-sm { width: auto; padding: 6px 10px; font-size: 0.8rem; margin: 0; }
+    .btn-edit { background: #64748b; }
     .btn-danger { background: var(--danger); }
     .btn-import { background: var(--success); }
 
@@ -106,14 +109,16 @@
       transform: translateX(-50%);
       background: #0f172a;
       color: white;
-      padding: 10px 20px;
+      padding: 12px 24px;
       border-radius: 20px;
       font-size: 0.9rem;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       z-index: 1000;
       opacity: 0;
       transition: opacity 0.3s, transform 0.3s;
       pointer-events: none;
+      text-align: center;
+      max-width: 90%;
     }
     #toast.show {
       opacity: 1;
@@ -271,19 +276,13 @@
 
     let myItems = [];
 
-    // דיווח שם משתמש ל-Google Analytics
     function trackAnalyticsLogin(userName) {
       if (typeof window.gtag === 'function') {
-        window.gtag('set', 'user_properties', {
-          'user_name': userName
-        });
-        window.gtag('event', 'login_success', {
-          'user_name': userName
-        });
+        window.gtag('set', 'user_properties', { 'user_name': userName });
+        window.gtag('event', 'login_success', { 'user_name': userName });
       }
     }
 
-    // בדיקת תוקף סשן
     function checkSessionValid() {
       if (!currentUser || !loginExpiry) return false;
       const now = Date.now();
@@ -334,11 +333,13 @@
     function showToast(msg) {
       toast.textContent = msg;
       toast.classList.add("show");
-      setTimeout(() => toast.classList.remove("show"), 2500);
+      setTimeout(() => toast.classList.remove("show"), 3000);
     }
 
+    // נרמול טקסט מתקדם להשוואת פריטים ושגיאות כתיב
     function normalizeText(text) {
-      return text.toLowerCase().replace(/[אהוי\s]/g, '');
+      return text.trim().toLowerCase()
+        .replace(/[אהוי\s\-_',."]/g, ''); // הסרת תנועות אהו"י, רווחים וסימני פיסוק
     }
 
     function getGreeting() {
@@ -456,12 +457,24 @@
         return;
       }
 
-      const normalizedInput = normalizeText(name);
-      const exists = myItems.some(i => normalizeText(i.name) === normalizedInput);
-      if (exists) {
-        showToast(`הפריט "${name}" כבר קיים ברשימה!`);
+      // 1. בדיקת התאמה מדויקת
+      const exactExists = myItems.some(i => i.name.trim().toLowerCase() === name.toLowerCase());
+      if (exactExists) {
+        newItemName.classList.add("error");
+        showToast(`⚠️ הפריט "${name}" כבר קיים ברשימה שלך!`);
         newItemName.focus();
         return;
+      }
+
+      // 2. בדיקת דמיון/שגיאות כתיב (נרמול)
+      const normalizedInput = normalizeText(name);
+      const similarItem = myItems.find(i => normalizeText(i.name) === normalizedInput || normalizeText(i.name).includes(normalizedInput) || normalizedInput.includes(normalizeText(i.name)));
+
+      if (similarItem && normalizedInput.length > 2) {
+        if (!confirm(`קיים כבר פריט דומה ברשימה שלך: "${similarItem.name}". האם להוסיף את "${name}" בכל זאת?`)) {
+          newItemName.focus();
+          return;
+        }
       }
 
       await addDoc(itemsRef, {
@@ -472,7 +485,7 @@
         createdAt: Date.now()
       });
 
-      showToast(`✨ "${name}" נוצר בהצלחה`);
+      showToast(`✨ "${name}" נוסף בהצלחה!`);
       newItemName.value = "";
       newItemName.focus();
     });
@@ -527,7 +540,8 @@
         <button class="badge ${item.isPublic ? 'public' : ''}" onclick="toggleVisibility('${item.id}', ${!item.isPublic})">
           ${item.isPublic ? '🌐 ציבורי' : '🔒 פרטי'}
         </button>
-        <button class="btn-sm btn-danger" onclick="deleteItem('${item.id}', '${item.name}')">✕</button>
+        <button class="btn-sm btn-edit" title="ערוך פריט" onclick="editItem('${item.id}', '${item.name}')">✏️</button>
+        <button class="btn-sm btn-danger" title="מחק פריט" onclick="deleteItem('${item.id}', '${item.name}')">✕</button>
       `;
       myItemsList.appendChild(div);
     }
@@ -613,6 +627,20 @@
 
     window.toggleVisibility = async (id, isPublic) => {
       await updateDoc(doc(db, "packing_items", id), { isPublic });
+    };
+
+    window.editItem = async (id, oldName) => {
+      const newName = prompt("ערוך את שם הפריט:", oldName);
+      if (newName !== null && newName.trim() !== "" && newName.trim() !== oldName) {
+        const trimmedName = newName.trim();
+        const exists = myItems.some(i => i.id !== id && i.name.toLowerCase() === trimmedName.toLowerCase());
+        if (exists) {
+          showToast(`⚠️ כבר קיים פריט בשם "${trimmedName}" ברשימה שלך`);
+          return;
+        }
+        await updateDoc(doc(db, "packing_items", id), { name: trimmedName });
+        showToast(`✏️ הפריט עודכן ל-"${trimmedName}"`);
+      }
     };
 
     window.deleteItem = async (id, name) => {
